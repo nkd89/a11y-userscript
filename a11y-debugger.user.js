@@ -1,3 +1,5 @@
+// @updateURL    https://github.com/nkd89/a11y-userscript/raw/refs/heads/main/a11y-debugger.user.js
+// @downloadURL  https://github.com/nkd89/a11y-userscript/raw/refs/heads/main/a11y-debugger.user.js
 // ==UserScript==
 // @name         Отладка Доступности WEB-приложений
 // @namespace    http://tampermonkey.net/
