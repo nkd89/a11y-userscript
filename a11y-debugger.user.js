@@ -1,15 +1,15 @@
-// @updateURL    https://github.com/nkd89/a11y-userscript/raw/refs/heads/main/a11y-debugger.user.js
-// @downloadURL  https://github.com/nkd89/a11y-userscript/raw/refs/heads/main/a11y-debugger.user.js
 // ==UserScript==
 // @name         Отладка Доступности WEB-приложений
 // @namespace    http://tampermonkey.net/
-// @version      0.6
+// @version      0.7
 // @description  Помогает эффективно выявлять проблемы доступности в веб-приложениях, учитывая динамическое содержимое и имитируя чтение скринридеров. Добавлены механизмы отладки и улучшена стабильность.
 // @author       Nikita Pankin (@izvenyaisya)
 // @match        *://*/*
 // @grant        GM_addStyle
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @updateURL    https://github.com/nkd89/a11y-userscript/raw/refs/heads/main/a11y-debugger.user.js
+// @downloadURL  https://github.com/nkd89/a11y-userscript/raw/refs/heads/main/a11y-debugger.user.js
 // ==/UserScript==
 
 (function () {
@@ -101,15 +101,9 @@
 
   // --- Вспомогательные функции ---
 
-  /**
-   * Вычисляет доступное имя элемента. Поддерживает несколько ID в aria-labelledby.
-   * @param {HTMLElement} element
-   * @returns {string} Доступное имя.
-   */
   function getAccessibleName(element) {
     if (!element || !element.hasAttribute) return "";
 
-    // 1. aria-labelledby (несколько ID)
     if (element.hasAttribute("aria-labelledby")) {
       const ids = element.getAttribute("aria-labelledby").split(/\s+/);
       let labelledTexts = [];
@@ -124,7 +118,6 @@
       });
       if (labelledTexts.length > 0) return labelledTexts.join(" ");
     }
-    // 2. aria-label
     if (
       element.hasAttribute("aria-label") &&
       typeof element.getAttribute("aria-label") === "string" &&
@@ -132,7 +125,6 @@
     ) {
       return element.getAttribute("aria-label").trim();
     }
-    // 3. Для input, textarea, select, связанных с label
     if (
       (element.tagName === "INPUT" ||
         element.tagName === "TEXTAREA" ||
@@ -148,7 +140,6 @@
         return label.textContent.trim();
       }
     }
-    // 4. Для img
     if (
       element.tagName === "IMG" &&
       element.hasAttribute("alt") &&
@@ -157,7 +148,6 @@
     ) {
       return element.getAttribute("alt").trim();
     }
-    // 5. Для input type="submit", "button", "reset"
     if (
       element.tagName === "INPUT" &&
       (element.type === "submit" ||
@@ -169,7 +159,6 @@
     ) {
       return element.getAttribute("value").trim();
     }
-    // 6. Для button, a, summary (текстовое содержимое)
     if (
       ["BUTTON", "A", "SUMMARY"].includes(element.tagName) &&
       typeof element.textContent === "string" &&
@@ -177,7 +166,6 @@
     ) {
       return element.textContent.trim();
     }
-    // 7. title атрибут (как последнее средство)
     if (
       element.hasAttribute("title") &&
       typeof element.getAttribute("title") === "string" &&
@@ -188,18 +176,12 @@
     return "";
   }
 
-  /**
-   * Вычисляет роль элемента.
-   * @param {HTMLElement} element
-   * @returns {string} Роль элемента.
-   */
   function getAccessibleRole(element) {
     if (!element || !element.hasAttribute) return "generic";
 
     if (element.hasAttribute("role")) {
       return element.getAttribute("role");
     }
-    // Семантические роли по умолчанию для HTML5 элементов
     if (element.tagName === "A" && element.hasAttribute("href")) return "link";
     if (element.tagName === "BUTTON") return "button";
     if (element.tagName === "INPUT") {
@@ -248,11 +230,6 @@
     return "generic";
   }
 
-  /**
-   * Вычисляет состояния и свойства элемента.
-   * @param {HTMLElement} element
-   * @returns {string[]} Массив строк с состояниями.
-   */
   function getAccessibleStateAndProperties(element) {
     if (!element || !element.hasAttribute) return [];
 
@@ -320,10 +297,6 @@
     return states;
   }
 
-  /**
-   * Отображает информацию скринридера для элемента.
-   * @param {HTMLElement} element
-   */
   function showScreenreaderInfo(element) {
     if (!screenreaderInfoEnabled) return;
     if (!element || !element.nodeType || element.nodeType !== 1) return;
@@ -390,9 +363,6 @@
     infoDiv.style.left = `${left}px`;
   }
 
-  /**
-   * Скрывает информацию скринридера.
-   */
   function hideScreenreaderInfo() {
     if (currentScreenreaderInfoElement) {
       currentScreenreaderInfoElement.remove();
@@ -400,7 +370,6 @@
     }
   }
 
-  // --- Обработчики событий для клика по подсвеченным элементам ---
   document.addEventListener("click", (e) => {
     const target = e.target;
     if (
@@ -416,8 +385,6 @@
       hideScreenreaderInfo();
     }
   });
-
-  // --- Функции активации/деактивации фич ---
 
   function toggleFocusableHighlight(enable) {
     const interactiveElements = document.querySelectorAll(
@@ -525,8 +492,6 @@
     toggleFocusableHighlight(featureStates["a11yDebug_focusable"]);
   }
 
-  // --- Панель управления ---
-
   function createControlPanel() {
     const panel = document.createElement("div");
     panel.id = "a11y-debug-panel";
@@ -579,10 +544,67 @@
       panel.appendChild(label);
     });
 
+    const statsDiv = document.createElement("div");
+    statsDiv.id = "a11y-debug-stats";
+    statsDiv.style.marginTop = "10px";
+    statsDiv.style.fontSize = "12px";
+    statsDiv.style.lineHeight = "1.3";
+    panel.appendChild(statsDiv);
+
     document.body.appendChild(panel);
   }
 
-  // --- Инициализация и MutationObserver ---
+  function updateStats() {
+    const focusableCount = document.querySelectorAll(
+      'a[href], button, input:not([type="hidden"]), select, textarea, ' +
+        '[tabindex]:not([tabindex="-1"]), ' +
+        '[role="button"], [role="link"], [role="checkbox"], [role="radio"], ' +
+        '[role="textbox"], [role="combobox"], [role="slider"], [role="spinbutton"], ' +
+        '[role="tab"], [role="menuitem"], [role="option"], [role="switch"], [contenteditable="true"]'
+    ).length;
+
+    const imagesWithoutAltCount = document.querySelectorAll(
+      "img:not([alt]), img[alt='']"
+    ).length;
+
+    const noAccessibleNameCount = (() => {
+      let count = 0;
+      const elementsToCheck = document.querySelectorAll(
+        'a[href], button, input:not([type="hidden"]), select, textarea, ' +
+          '[role="button"], [role="link"], [role="checkbox"], [role="radio"], [role="textbox"], ' +
+          '[role="combobox"], [role="slider"], [role="tab"], [role="menuitem"], [role="option"], ' +
+          '[role="heading"], [role="img"], [role="form"], [role="group"], [role="region"], ' +
+          '[tabindex]:not([tabindex="-1"])'
+      );
+
+      elementsToCheck.forEach((el) => {
+        if (el.closest("[aria-hidden='true']")) return;
+        const hasName = getAccessibleName(el);
+        const isDecorativeImage =
+          el.tagName === "IMG" && el.getAttribute("alt") === "";
+        const isPartofNamedComponent =
+          el.closest("[aria-labelledby], [aria-label]") &&
+          !["BUTTON", "A", "INPUT", "SELECT", "TEXTAREA", "IMG"].includes(
+            el.tagName
+          );
+
+        if (!isDecorativeImage && !hasName && !isPartofNamedComponent) {
+          count++;
+        }
+      });
+      return count;
+    })();
+
+    const statsDiv = document.getElementById("a11y-debug-stats");
+    if (statsDiv) {
+      statsDiv.innerHTML = `
+            <strong>Статистика:</strong><br>
+            Фокусируемых элементов: ${focusableCount}<br>
+            Изображений без alt: ${imagesWithoutAltCount}<br>
+            Элементов без доступного имени: ${noAccessibleNameCount}
+        `;
+    }
+  }
 
   const featureStates = {
     a11yDebug_focusable: false,
@@ -605,6 +627,8 @@
       );
       toggleHighContrastMode(featureStates["a11yDebug_highContrast"]);
       toggleScreenreaderInfo(featureStates["a11yDebug_screenreaderInfo"]);
+
+      updateStats();
     } catch (e) {
       console.error("Tampermonkey A11y Debugger: Error applying features", e);
     }
